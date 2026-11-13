@@ -16,12 +16,26 @@ class DriveTrain:
     REAR_RIGHT_PINS = [18,25,11,27,22]
 
     #PID
-    pid = PID(0,0, setpoint=0, sample_time=None, output_limits=(-1, 1))
+    pid = PID(0,0,0, setpoint=0, sample_time=None, output_limits=(-1, 1))
 
     def __init__(self):
         self.frontLeftModule = Mecanum_Module(self.FRONT_LEFT_PINS[0],self.FRONT_LEFT_PINS[1],self.FRONT_LEFT_PINS[2],self.FRONT_LEFT_PINS[3],self.FRONT_LEFT_PINS[4],self.MAX_MOTOR_RPM,self.pid)
         self.frontRightModule = Mecanum_Module(self.FRONT_RIGHT_PINS[0],self.FRONT_RIGHT_PINS[1],self.FRONT_RIGHT_PINS[2],self.FRONT_RIGHT_PINS[3],self.FRONT_RIGHT_PINS[4],self.MAX_MOTOR_RPM,self.pid)
         self.rearLeftModule = Mecanum_Module(self.REAR_LEFT_PINS[0],self.REAR_LEFT_PINS[1],self.REAR_LEFT_PINS[2],self.REAR_LEFT_PINS[3],self.REAR_LEFT_PINS[4],self.pid)
         self.rearRightModule = Mecanum_Module(self.REAR_RIGHT_PINS[0],self.REAR_RIGHT_PINS[1],self.REAR_RIGHT_PINS[2],self.REAR_RIGHT_PINS[3],self.REAR_RIGHT_PINS[4],self.MAX_MOTOR_RPM,self.pid)
+
+    #Normalized Values
+    def drive(self,forward,strafe,rotation):
+        if forward > 1 : forward = 1
+        if forward < -1 : forward = -1
+        if strafe > 1 : strafe = 1
+        if strafe < -1 : strafe = -1
+        if rotation > 1 : rotation = 1
+        if rotation < -1 : rotation = -1
+
+        self.frontLeftModule.set_target_rpm()
+        self.frontRightModule.set_target_rpm()
+        self.rearLeftModule.set_target_rpm()
+        self.rearRightModule.set_target_rpm()
 
     
