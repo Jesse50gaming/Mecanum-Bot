@@ -1,3 +1,14 @@
-from gpiozero import Motor, DigitalInputDevice
-from simple_pid import PID
+
 import time
+
+
+
+def initialize():
+    pass
+
+
+def main():
+    initialize()
+
+if __name__ == '__main__':
+    main()
