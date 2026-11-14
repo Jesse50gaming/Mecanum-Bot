@@ -33,9 +33,22 @@ class DriveTrain:
         if rotation > 1 : rotation = 1
         if rotation < -1 : rotation = -1
 
-        self.frontLeftModule.set_target_rpm()
-        self.frontRightModule.set_target_rpm()
-        self.rearLeftModule.set_target_rpm()
-        self.rearRightModule.set_target_rpm()
+        FL_Speed = forward + strafe + rotation
+        FR_Speed = forward - strafe - rotation
+        RL_Speed = forward - strafe + rotation
+        RR_Speed = forward + strafe - rotation
+
+        maxSpeed = max(FL_Speed,FR_Speed,RL_Speed,RR_Speed)
+
+        if maxSpeed > 1:
+            FL_Speed /= maxSpeed
+            FR_Speed /= maxSpeed
+            RL_Speed /= maxSpeed
+            RR_Speed /= maxSpeed
+
+        self.frontLeftModule.set_target_rpm(FL_Speed)
+        self.frontRightModule.set_target_rpm(FR_Speed)
+        self.rearLeftModule.set_target_rpm(RL_Speed)
+        self.rearRightModule.set_target_rpm(RR_Speed)
 
     
