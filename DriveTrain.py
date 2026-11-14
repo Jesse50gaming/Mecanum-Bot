@@ -1,4 +1,3 @@
-from gpiozero import Motor, DigitalInputDevice
 from simple_pid import PID
 from Mecanum_Module import Mecanum_Module
 
@@ -26,12 +25,9 @@ class DriveTrain:
 
     #Normalized Values
     def drive(self,forward,strafe,rotation):
-        if forward > 1 : forward = 1
-        if forward < -1 : forward = -1
-        if strafe > 1 : strafe = 1
-        if strafe < -1 : strafe = -1
-        if rotation > 1 : rotation = 1
-        if rotation < -1 : rotation = -1
+        forward = min(1,max(-1,forward))
+        strafe = min(1,max(-1,strafe))
+        rotation = min(1,max(-1,rotation))
 
         FL_Speed = forward + strafe + rotation
         FR_Speed = forward - strafe - rotation
@@ -50,5 +46,12 @@ class DriveTrain:
         self.frontRightModule.set_target_rpm(FR_Speed)
         self.rearLeftModule.set_target_rpm(RL_Speed)
         self.rearRightModule.set_target_rpm(RR_Speed)
+
+    #call 50 times per second
+    def update(self):
+        self.frontLeftModule.update()
+        self.frontRightModule.update()
+        self.rearLeftModule.update()
+        self.rearRightModule.update()
 
     
