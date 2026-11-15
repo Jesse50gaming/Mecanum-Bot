@@ -1,2 +1,4 @@
 gpiozero 
 simple-pid
+fastapi
+uvicorn
