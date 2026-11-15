@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Robot control</title>
+<style>
+  :root {
+    --bg: #eef1f3;
+    --panel: #ffffff;
+    --line: #cfd6db;
+    --text: #14202a;
+    --muted: #5b6b78;
+    --drive: #0f8b8d;
+    --stop: #d62839;
+    --stop-text: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #11171c;
+      --panel: #1a2229;
+      --line: #2e3a43;
+      --text: #e6edf2;
+      --muted: #8c9ba7;
+      --drive: #3cc7c9;
+      --stop: #ef4452;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 16px;
+    line-height: 1.4;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  main {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 16px;
+    display: grid;
+    gap: 16px;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  h1 { font-size: 1.25rem; margin: 0; font-weight: 650; }
+  .status { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--stop); }
+  .dot.on { background: var(--drive); }
+
+  .estop-bar { display: flex; gap: 12px; }
+  button {
+    font: inherit;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    color: var(--text);
+    border-radius: 10px;
+    padding: 12px 18px;
+    cursor: pointer;
+    min-height: 48px;
+  }
+  button:focus-visible, .pad:focus-visible { outline: 3px solid var(--drive); outline-offset: 2px; }
+  #estop {
+    flex: 1;
+    background: var(--stop);
+    border-color: var(--stop);
+    color: var(--stop-text);
+    font-weight: 700;
+    font-size: 1.1rem;
+  }
+  #banner {
+    display: none;
+    background: var(--stop);
+    color: var(--stop-text);
+    padding: 12px 16px;
+    border-radius: 10px;
+    font-weight: 600;
+  }
+  body.stopped #banner { display: block; }
+  body.stopped .pad { opacity: 0.4; }
+
+  .pads { display: flex; justify-content: space-around; gap: 16px; flex-wrap: wrap; }
+  .pad-wrap { text-align: center; }
+  .pad-wrap p { margin: 8px 0 0; color: var(--muted); }
+  .pad {
+    position: relative;
+    width: min(42vw, 260px);
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: var(--panel);
+    border: 2px solid var(--line);
+    touch-action: none;
+    margin: 0 auto;
+  }
+  .pad.bar { border-radius: 130px; aspect-ratio: 2.2; width: min(42vw, 260px); }
+  .pad::before, .pad::after {
+    content: "";
+    position: absolute;
+    background: var(--line);
+  }
+  .pad::before { left: 50%; top: 10%; bottom: 10%; width: 1px; }
+  .pad::after { top: 50%; left: 10%; right: 10%; height: 1px; }
+  .pad.bar::before { top: 20%; bottom: 20%; }
+  .pad.bar::after { display: none; }
+  .knob {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 30%;
+    aspect-ratio: 1;
+    margin: -15% 0 0 -15%;
+    border-radius: 50%;
+    background: var(--drive);
+    pointer-events: none;
+  }
+  .pad.bar .knob { width: 20%; margin: -10% 0 0 -10%; }
+
+  section {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  h2 { font-size: 1rem; margin: 0 0 10px; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  td { padding: 4px 0; border-bottom: 1px solid var(--line); }
+  td:last-child { text-align: right; }
+  .empty { color: var(--muted); margin: 0; }
+  #logs a { display: block; padding: 6px 0; color: var(--drive); }
+  .hint { color: var(--muted); font-size: 0.9rem; margin: 0; }
+  @media (prefers-reduced-motion: no-preference) { .dot { transition: background 0.2s; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Robot control</h1>
+    <div class="status"><span class="dot" id="dot"></span><span id="statusText">Connecting</span></div>
+  </header>
+
+  <div id="banner">Emergency stop is on. The robot will not move until you reset it.</div>
+
+  <div class="estop-bar">
+    <button id="estop">Emergency stop</button>
+    <button id="reset">Reset stop</button>
+  </div>
+
+  <div class="pads">
+    <div class="pad-wrap">
+      <div class="pad" id="padMove" tabindex="0" aria-label="Move joystick"><div class="knob"></div></div>
+      <p>Move and strafe</p>
+    </div>
+    <div class="pad-wrap">
+      <div class="pad bar" id="padTurn" tabindex="0" aria-label="Rotate slider"><div class="knob"></div></div>
+      <p>Rotate</p>
+    </div>
+  </div>
+  <p class="hint">Keyboard: W A S D to move, Q and E to rotate, Space for emergency stop.</p>
+  <p class="hint">DualSense: left stick moves and strafes, right stick rotates, hold L1 for slow mode, Circle is emergency stop, Options resets it.</p>
+  <p class="hint" id="padStatus">Controller: none. Press a button on a connected DualSense.</p>
+
+  <section>
+    <h2>Live data</h2>
+    <table id="telemetry"><tbody></tbody></table>
+    <p class="empty" id="telemetryEmpty">Waiting for data from the robot.</p>
+  </section>
+
+  <section>
+    <h2>Logs</h2>
+    <button id="loadLogs">Show log files</button>
+    <div id="logs"></div>
+  </section>
+</main>
+
+<script>
+  const params = new URLSearchParams(location.search);
+  const token = params.get("token") || "";
+  const tokenQuery = token ? "?token=" + encodeURIComponent(token) : "";
+  const wsProto = location.protocol === "https:" ? "wss" : "ws";
+
+  const dot = document.getElementById("dot");
+  const statusText = document.getElementById("statusText");
+  let ws = null;
+
+  // ---- Connection ----------------------------------------------------
+  function connect() {
+    ws = new WebSocket(wsProto + "://" + location.host + "/ws" + tokenQuery);
+    ws.onopen = () => setStatus(true);
+    ws.onclose = () => { setStatus(false); setTimeout(connect, 1000); };
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      document.body.classList.toggle("stopped", data.estop);
+      renderTelemetry(data.telemetry || {});
+    };
+  }
+  function setStatus(connected) {
+    dot.classList.toggle("on", connected);
+    statusText.textContent = connected ? "Connected" : "Disconnected. Retrying";
+  }
+  function send(obj) {
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
+  }
+
+  // ---- Joysticks -----------------------------------------------------
+  const pad = { x: 0, y: 0, w: 0 };
+  const keys = new Set();
+
+  function makePad(element, onChange, xOnly) {
+    const knob = element.querySelector(".knob");
+    let activeId = null;
+
+    function update(event) {
+      const rect = element.getBoundingClientRect();
+      const halfW = rect.width / 2;
+      const halfH = rect.height / 2;
+      let dx = (event.clientX - (rect.left + halfW)) / halfW;
+      let dy = xOnly ? 0 : (event.clientY - (rect.top + halfH)) / halfH;
+      const length = Math.hypot(dx, dy);
+      if (length > 1) { dx /= length; dy /= length; }
+      const reach = xOnly ? 0.4 : 0.6;
+      knob.style.transform = "translate(" + (dx * halfW * reach) + "px," + (dy * halfH * reach) + "px)";
+      onChange(Math.abs(dx) < 0.08 ? 0 : dx, Math.abs(dy) < 0.08 ? 0 : -dy);
+    }
+    function release(event) {
+      if (event.pointerId !== activeId) return;
+      activeId = null;
+      knob.style.transform = "";
+      onChange(0, 0);
+    }
+    element.addEventListener("pointerdown", (event) => {
+      activeId = event.pointerId;
+      element.setPointerCapture(activeId);
+      update(event);
+    });
+    element.addEventListener("pointermove", (event) => {
+      if (event.pointerId === activeId) update(event);
+    });
+    element.addEventListener("pointerup", release);
+    element.addEventListener("pointercancel", release);
+  }
+
+  makePad(document.getElementById("padMove"), (dx, dy) => { pad.x = dx; pad.y = dy; }, false);
+  makePad(document.getElementById("padTurn"), (dx) => { pad.w = dx; }, true);
+
+  // ---- Keyboard ------------------------------------------------------
+  window.addEventListener("keydown", (event) => {
+    if (event.code === "Space") { send({ estop: true }); event.preventDefault(); return; }
+    keys.add(event.key.toLowerCase());
+  });
+  window.addEventListener("keyup", (event) => keys.delete(event.key.toLowerCase()));
+  window.addEventListener("blur", () => keys.clear());
+
+  function axis(plus, minus) {
+    return (keys.has(plus) ? 1 : 0) - (keys.has(minus) ? 1 : 0);
+  }
+  function clamp(v) { return Math.max(-1, Math.min(1, v)); }
+
+  // ---- DualSense / gamepad -------------------------------------------
+  const DEADZONE = 0.12;
+  const padStatus = document.getElementById("padStatus");
+  let lastButtons = [];
+
+  function shape(value) {
+    // Ignore the stick's resting wobble, then soften the response near the centre
+    // so small pushes give fine control and full push gives full speed.
+    const size = Math.abs(value);
+    if (size < DEADZONE) return 0;
+    const scaled = (size - DEADZONE) / (1 - DEADZONE);
+    return Math.sign(value) * scaled * scaled;
+  }
+
+  function activeGamepad() {
+    const list = navigator.getGamepads ? navigator.getGamepads() : [];
+    for (const gp of list) {
+      if (gp && gp.connected) return gp;
+    }
+    return null;
+  }
+
+  function readGamepad() {
+    const gp = activeGamepad();
+    if (!gp) {
+      padStatus.textContent = "Controller: none. Press a button on a connected DualSense.";
+      lastButtons = [];
+      return { x: 0, y: 0, w: 0 };
+    }
+    if (gp.mapping !== "standard") {
+      padStatus.textContent = "Controller: connected, but the browser is not using the standard button layout.";
+      return { x: 0, y: 0, w: 0 };
+    }
+    padStatus.textContent = "Controller: connected";
+
+    const pressed = gp.buttons.map((b) => b.pressed);
+    const justPressed = (i) => pressed[i] && !lastButtons[i];
+    if (justPressed(1)) send({ estop: true });   // Circle
+    if (justPressed(9)) send({ reset: true });   // Options
+    lastButtons = pressed;
+
+    const slow = pressed[4] ? 0.4 : 1;           // hold L1 for slow mode
+    return {
+      x: shape(gp.axes[0]) * slow,               // left stick left/right: strafe
+      y: shape(-gp.axes[1]) * slow,              // left stick up/down: forward
+      w: shape(gp.axes[2]) * slow,               // right stick left/right: rotate
+    };
+  }
+
+  // Send the current command 20 times a second. The robot stops if these stop arriving.
+  setInterval(() => {
+    const gp = readGamepad();
+    send({
+      x: clamp(pad.x + axis("d", "a") + gp.x),
+      y: clamp(pad.y + axis("w", "s") + gp.y),
+      w: clamp(pad.w + axis("e", "q") + gp.w),
+    });
+  }, 50);
+
+  // ---- Buttons -------------------------------------------------------
+  document.getElementById("estop").addEventListener("click", () => send({ estop: true }));
+  document.getElementById("reset").addEventListener("click", () => send({ reset: true }));
+
+  // ---- Telemetry -----------------------------------------------------
+  const tbody = document.querySelector("#telemetry tbody");
+  const emptyText = document.getElementById("telemetryEmpty");
+
+  function renderTelemetry(data) {
+    const keysSorted = Object.keys(data).sort();
+    emptyText.style.display = keysSorted.length ? "none" : "block";
+    tbody.innerHTML = "";
+    for (const key of keysSorted) {
+      const row = document.createElement("tr");
+      const name = document.createElement("td");
+      const value = document.createElement("td");
+      name.textContent = key;
+      value.textContent = typeof data[key] === "number" ? data[key].toFixed(2) : String(data[key]);
+      row.append(name, value);
+      tbody.appendChild(row);
+    }
+  }
+
+  // ---- Logs ----------------------------------------------------------
+  document.getElementById("loadLogs").addEventListener("click", async () => {
+    const box = document.getElementById("logs");
+    box.textContent = "";
+    try {
+      const response = await fetch("/logs" + tokenQuery);
+      const names = await response.json();
+      if (!names.length) { box.textContent = "No logs yet."; return; }
+      for (const name of names) {
+        const link = document.createElement("a");
+        link.href = "/logs/" + encodeURIComponent(name) + tokenQuery;
+        link.textContent = name;
+        box.appendChild(link);
+      }
+    } catch (error) {
+      box.textContent = "Could not load the log list.";
+    }
+  });
+
+  connect();
+</script>
+</body>
+</html>
